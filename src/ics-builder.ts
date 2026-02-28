@@ -45,8 +45,7 @@ const isHome = (match: Match): boolean =>
 const buildSummary = (match: Match): string => {
   const home = match.homeTeam.shortName || match.homeTeam.name;
   const away = match.awayTeam.shortName || match.awayTeam.name;
-  const comp = match.competition.name;
-  return `${home} vs ${away} (${comp})`;
+  return `${home} vs ${away}`;
 };
 
 const buildDescription = (match: Match): string => {
@@ -64,7 +63,7 @@ const buildDescription = (match: Match): string => {
   if (match.status === "FINISHED" && ft?.home != null && ft?.away != null) {
     lines.push(`Score: ${ft.home} - ${ft.away}`);
   }
-  return lines.join("\\n");
+  return lines.join("\n");
 };
 
 const mapStatus = (status: MatchStatus): string => {
