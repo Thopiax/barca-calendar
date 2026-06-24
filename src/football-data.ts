@@ -9,9 +9,10 @@ export interface Competition {
 }
 
 export interface Team {
-  readonly id: number;
-  readonly name: string;
-  readonly shortName: string;
+  // Null for undetermined knockout slots (e.g. a quarter-final before teams are set).
+  readonly id: number | null;
+  readonly name: string | null;
+  readonly shortName: string | null;
 }
 
 export interface Score {
@@ -34,6 +35,7 @@ export interface Match {
   readonly competition: Competition;
   readonly utcDate: string;
   readonly status: MatchStatus;
+  readonly stage: string;
   readonly matchday: number | null;
   readonly homeTeam: Team;
   readonly awayTeam: Team;

@@ -51,15 +51,33 @@ export interface CalendarOptions {
 
 // --- Match → summary / description ---
 
+// Human round name for knockout stages; null for the group stage (always has teams).
+const STAGE_LABELS: Record<string, string> = {
+  LAST_32: "Round of 32",
+  LAST_16: "Round of 16",
+  QUARTER_FINALS: "Quarter-final",
+  SEMI_FINALS: "Semi-final",
+  THIRD_PLACE: "Third-place Play-off",
+  FINAL: "Final",
+};
+
+const stageLabel = (stage: string): string | null => STAGE_LABELS[stage] ?? null;
+
 const buildSummary = (match: Match): string => {
   const home = match.homeTeam.shortName || match.homeTeam.name;
   const away = match.awayTeam.shortName || match.awayTeam.name;
+  // Undetermined knockout slot → show the round instead of "null vs null".
+  if (!home || !away) return stageLabel(match.stage) ?? "TBD";
   return `${home} vs ${away}`;
 };
 
 const buildDescription = (match: Match, opts: CalendarOptions): string => {
   const lines: string[] = [];
   lines.push(`Competition: ${match.competition.name}`);
+  const round = stageLabel(match.stage);
+  if (round) {
+    lines.push(`Round: ${round}`);
+  }
   if (match.matchday != null) {
     lines.push(`Matchday: ${match.matchday}`);
   }
