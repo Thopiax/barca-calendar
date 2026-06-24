@@ -37,10 +37,19 @@ const foldLine = (line: string): string => {
   return parts.join("\r\n");
 };
 
-// --- Match → summary / description ---
+// --- Calendar options: parameterize per-feed behavior ---
 
-const isHome = (match: Match): boolean =>
-  match.homeTeam.id === config.teamId;
+export interface CalendarOptions {
+  readonly calendarName: string;
+  readonly uidPrefix: string;
+  // Label home/away relative to this team. Omit for neutral feeds (e.g. World Cup).
+  readonly teamId?: number;
+  // Minutes-before reminder. Omit for no notifications.
+  readonly alarmMinutesBefore?: number;
+  readonly alarmLabel?: string;
+}
+
+// --- Match → summary / description ---
 
 const buildSummary = (match: Match): string => {
   const home = match.homeTeam.shortName || match.homeTeam.name;
@@ -48,7 +57,7 @@ const buildSummary = (match: Match): string => {
   return `${home} vs ${away}`;
 };
 
-const buildDescription = (match: Match): string => {
+const buildDescription = (match: Match, opts: CalendarOptions): string => {
   const lines: string[] = [];
   lines.push(`Competition: ${match.competition.name}`);
   if (match.matchday != null) {
@@ -57,13 +66,15 @@ const buildDescription = (match: Match): string => {
   if (match.venue) {
     lines.push(`Venue: ${match.venue}`);
   }
-  lines.push(isHome(match) ? "Home" : "Away");
+  if (opts.teamId != null) {
+    lines.push(match.homeTeam.id === opts.teamId ? "Home" : "Away");
+  }
 
   const ft = match.score?.fullTime;
   if (match.status === "FINISHED" && ft?.home != null && ft?.away != null) {
     lines.push(`Score: ${ft.home} - ${ft.away}`);
   }
-  return lines.join("\n");
+  return lines.join("\n"); // real newline; escapeText encodes it to \n per RFC 5545
 };
 
 const mapStatus = (status: MatchStatus): string => {
@@ -78,10 +89,10 @@ const mapStatus = (status: MatchStatus): string => {
 
 // --- VEVENT builder ---
 
-const buildEvent = (match: Match): string => {
+const buildEvent = (match: Match, opts: CalendarOptions): string => {
   const dtStart = toIcsDate(match.utcDate);
   const dtEnd = toIcsDate(addMinutesIso(match.utcDate, config.matchDurationMinutes));
-  const uid = `match-${match.id}@${config.calendarDomain}`;
+  const uid = `${opts.uidPrefix}-${match.id}@${config.calendarDomain}`;
   const now = toIcsDate(new Date().toISOString());
 
   const lines = [
@@ -91,7 +102,7 @@ const buildEvent = (match: Match): string => {
     `DTSTART:${dtStart}`,
     `DTEND:${dtEnd}`,
     foldLine(`SUMMARY:${escapeText(buildSummary(match))}`),
-    foldLine(`DESCRIPTION:${escapeText(buildDescription(match))}`),
+    foldLine(`DESCRIPTION:${escapeText(buildDescription(match, opts))}`),
     `STATUS:${mapStatus(match.status)}`,
     `TRANSP:OPAQUE`,
   ];
@@ -100,13 +111,13 @@ const buildEvent = (match: Match): string => {
     lines.push(foldLine(`LOCATION:${escapeText(match.venue)}`));
   }
 
-  // Only add alarm for upcoming matches
-  if (match.status !== "FINISHED") {
+  // Only add alarm if the feed opted in, and only for upcoming matches.
+  if (opts.alarmMinutesBefore != null && match.status !== "FINISHED") {
     lines.push(
       "BEGIN:VALARM",
-      "TRIGGER:-PT3H",
+      `TRIGGER:-PT${opts.alarmMinutesBefore}M`,
       "ACTION:DISPLAY",
-      `DESCRIPTION:${config.teamName} plays in 3 hours!`,
+      `DESCRIPTION:${escapeText(opts.alarmLabel ?? "Upcoming match")}`,
       "END:VALARM"
     );
   }
@@ -117,17 +128,20 @@ const buildEvent = (match: Match): string => {
 
 // --- Full calendar builder ---
 
-export const buildCalendar = (matches: readonly Match[]): string => {
+export const buildCalendar = (
+  matches: readonly Match[],
+  opts: CalendarOptions
+): string => {
   const header = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    `PRODID:-//${config.calendarDomain}//Barca Calendar//EN`,
-    `X-WR-CALNAME:${config.calendarName}`,
+    `PRODID:-//${config.calendarDomain}//${opts.calendarName}//EN`,
+    `X-WR-CALNAME:${opts.calendarName}`,
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
   ].join("\r\n");
 
-  const events = matches.map(buildEvent).join("\r\n");
+  const events = matches.map((m) => buildEvent(m, opts)).join("\r\n");
 
   const footer = "END:VCALENDAR";
 
